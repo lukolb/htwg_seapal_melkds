@@ -1,0 +1,17 @@
+/* entryinfo.php */
+.entryinfo {
+	font-family: Verdana;
+	padding-top: 50px;
+	padding-left: 5%;
+	padding-right: 5%;
+	margin-left: auto;
+	margin-right: auto;
+	padding-bottom: 50px;
+ 	background: url(../images/page-content-bg.png) repeat;
+ 	border-radius: 20px;
+ 	width: 1000px;
+}
+
+.entryinfo_column2 {
+	padding-left: 20px;
+}

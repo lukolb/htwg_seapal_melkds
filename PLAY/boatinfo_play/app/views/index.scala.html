@@ -1,0 +1,272 @@
+@(boats: Boats)
+
+@import helper._
+
+@main("Boatinfo") {   
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.5/jquery.min.js"></script>
+    <script type="text/javascript">
+    	var selectedIndex;
+    	var highestIndex = @boats.getSize()-1;
+    	
+    	$(function() {
+    		updateTable();
+    	});
+    	
+    	function updateTable() {
+    		var s = "";
+    		@for(boat <- boats.getList) {
+					s = s + "<tr class=\"boatinfo_table_nolink\" id=@boats.getIndex(boat) onMouseOver=\"javaScript:updateStyle(this.id)\" onMouseOut=\"javaScript:updateStyle(this.id)\" onClick=\"javaScript:updateVariables(this.id)\">"
+						+ "<td class=\"boatinfo_table_row\">@boat.name</td>"
+						+ "<td class=\"boatinfo_table_row\">@boat.typ</td>"
+						+ "<td class=\"boatinfo_table_row\">@boat.constructor</td>"
+						+ "<td class=\"boatinfo_table_row\">@boat.length</td>"
+						+ "<td class=\"boatinfo_table_row\">@boat.owner</td>"
+						+ "<td class=\"boatinfo_table_row\" style=\"text-align: center\">"
+						+ "<input type=\"image\" src=\"/assets/images/button.png\">"
+						+ "</td>"
+						+ "</tr>"		
+				}
+			var list = document.getElementById('list');
+			list.innerHTML = s;
+    	}
+    	
+    	function updateStyle(index) {
+    		if (document.getElementById(index).className=='boatinfo_table_link_click') {
+				document.getElementById(index).className='boatinfo_table_link_click';
+			}
+		
+			if (document.getElementById(index).className=='boatinfo_table_nolink') {
+				document.getElementById(index).className='boatinfo_table_link';
+			} else if (document.getElementById(index).className=='boatinfo_table_link') {
+				document.getElementById(index).className='boatinfo_table_nolink';
+			}
+    	} 	
+    	
+    	function updateVariables(i) {
+			selectedIndex = i;
+			changeOtherElements(i);
+			updateForm(i);
+			if (document.getElementById(i).className=='boatinfo_table_link') {
+				document.getElementById(i).className='boatinfo_table_link_click';
+			}	
+    	}
+    	
+    	function changeOtherElements(i) {
+			for (var j = 0; j <= highestIndex; j++) {
+				if (j == i) {
+		   			document.getElementById(i).className='boatinfo_table_link_click';
+				} else {
+					document.getElementById(j).className='boatinfo_table_nolink';
+				}
+			}
+		}
+    	
+    	function next() {
+    		selectedIndex++;
+    		if (selectedIndex >= highestIndex) {
+    			selectedIndex = highestIndex;
+    		}
+			changeOtherElements(selectedIndex);
+			updateForm(selectedIndex);
+			if (document.getElementById(selectedIndex).className=='boatinfo_table_link') {
+				document.getElementById(selectedIndex).className='boatinfo_table_link_click';
+			}	
+    	}
+    	
+    	function previous() {
+    		selectedIndex--;
+    		if (selectedIndex < 0) {
+    			selectedIndex = 0;
+    		}
+			changeOtherElements(selectedIndex);
+			updateForm(selectedIndex);
+			if (document.getElementById(selectedIndex).className=='boatinfo_table_link') {
+				document.getElementById(selectedIndex).className='boatinfo_table_link_click';
+			}	
+    	}
+    	
+    	function latest() {
+    		selectedIndex = @boats.getIndex(boats.gethighestID());
+    		changeOtherElements(selectedIndex);
+			updateForm(selectedIndex);
+			if (document.getElementById(selectedIndex).className=='boatinfo_table_link') {
+				document.getElementById(selectedIndex).className='boatinfo_table_link_click';
+			}
+    	}
+    	    	
+    	function updateForm(i) {
+    		$.getJSON('/boatinfo_getBoat',
+    			 	 {'idx': i},
+    			  		function(data) {
+							document.getElementsByName('bootsname')[0].value = data.name;
+							document.getElementsByName('registernr')[0].value = data.reg_nr;
+							document.getElementsByName('segelzeichen')[0].value = data.sailsign;
+					  	    document.getElementsByName('heimathafen')[0].value = data.port;
+							document.getElementsByName('yachtclub')[0].value = data.club;
+							document.getElementsByName('eigner')[0].value = data.owner;
+							document.getElementsByName('versicherung')[0].value = data.insurance;
+							document.getElementsByName('rufzeichen')[0].value = data.call_sign;
+					  		document.getElementsByName('typ')[0].value = data.typ;
+							document.getElementsByName('konstrukteur')[0].value = data.constructor;
+							document.getElementsByName('laenge')[0].value = data.length;
+							document.getElementsByName('breite')[0].value = data.width;
+							document.getElementsByName('tiefgang')[0].value = data.depth;
+							document.getElementsByName('masthoehe')[0].value = data.height;
+					  		document.getElementsByName('verdraengung')[0].value = data.displacement;
+							document.getElementsByName('rigart')[0].value = data.art;
+							document.getElementsByName('baujahr')[0].value = data.build_year;
+							document.getElementsByName('motor')[0].value = data.motor;
+							document.getElementsByName('tankgroesse')[0].value = data.tank_size;
+					  		document.getElementsByName('wassertankgroesse')[0].value = data.water_tank;
+							document.getElementsByName('abwassertankgroesse')[0].value = data.effluent_tank;
+							document.getElementsByName('grosssegelgroesse')[0].value = data.big_sail;
+					  		document.getElementsByName('genuagroesse')[0].value = data.genua_size;
+							document.getElementsByName('spigroesse')[0].value = data.spi_size;
+						});
+    		}		
+    		
+    		function delete_Boat() {
+    			$.get('/boatinfo_deleteBoat',
+				      {'idx': selectedIndex},
+				      function(data) {
+				      	  window.alert("Eintrag " + data + " wurde erfolgreich gelöscht");
+				      	  window.open('http://localhost:9000/boatinfo', "_self");
+				      })
+				      .error(function(data) {
+				      	alert("Error: " + data);
+				      });	
+    		}
+    		
+    		function insert_Boat() {
+    			var boat = {
+    				bootsname: 				document.getElementsByName('bootsname')[0].value,
+					registernr: 			document.getElementsByName('registernr')[0].value,
+					segelzeichen:			document.getElementsByName('segelzeichen')[0].value,
+			  	    heimathafen: 			document.getElementsByName('heimathafen')[0].value,
+					yachtclub: 				document.getElementsByName('yachtclub')[0].value,
+					eigner:					document.getElementsByName('eigner')[0].value,
+					versicherung:			document.getElementsByName('versicherung')[0].value,
+					rufzeichen: 			document.getElementsByName('rufzeichen')[0].value,
+			  		typ: 					document.getElementsByName('typ')[0].value,
+					konstrukteur: 			document.getElementsByName('konstrukteur')[0].value,
+					laenge: 				document.getElementsByName('laenge')[0].value,
+					breite: 				document.getElementsByName('breite')[0].value,
+					tiefgang: 				document.getElementsByName('tiefgang')[0].value,
+					masthoehe:				document.getElementsByName('masthoehe')[0].value,
+			  		verdraengung: 			document.getElementsByName('verdraengung')[0].value,
+					rigart: 				document.getElementsByName('rigart')[0].value,
+					baujahr: 				document.getElementsByName('baujahr')[0].value,
+					motor: 					document.getElementsByName('motor')[0].value,
+					tankgroesse: 			document.getElementsByName('tankgroesse')[0].value,
+			  		wassertankgroesse: 		document.getElementsByName('wassertankgroesse')[0].value,
+					abwassertankgroesse: 	document.getElementsByName('abwassertankgroesse')[0].value,
+					grosssegelgroesse: 		document.getElementsByName('grosssegelgroesse')[0].value,
+			  		genuagroesse: 			document.getElementsByName('genuagroesse')[0].value,
+					spigroesse: 			document.getElementsByName('spigroesse')[0].value		
+    			};
+    			$.post('/boatinfo_insertBoat',
+	    				boat,
+					   function(data) {
+					   		alert(data);
+					   		// Seite neu laden
+					   		window.open('http://localhost:9000/boatinfo', "_self");
+					   }).error(function(data) {
+				      		alert("Error: " + data);
+				      });	
+    		}
+    </script>
+    
+    <h1 style="text-align: center">Boatinfo</h1>
+    <link href='@routes.Assets.at("stylesheets/style.css")' rel="stylesheet" type="text/css" media="screen"/>
+    <div class="boatinfo">
+		<table id="boatinfo_table">
+			<tr>
+				<td><label for="bootsname">Bootsname</label></td>
+				<td><input type="text" name="bootsname" id="bootsname" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="typ">Typ</label></td>
+				<td><input type="text" name="typ" id="typ" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="baujahr">Baujahr</label></td>
+				<td><input type="text" name="baujahr" id="baujahr" onkeyup="isNumber(this.value, this.id, 4)" /></td>
+			</tr>
+			<tr>
+				<td><label for="registernr">Registernr.</label></td>
+				<td><input type="text" name="registernr" id="registernr" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="konstrukteur">Konstrukteur</label></td>
+				<td><input type="text" name="konstrukteur" id="konstrukteur" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="motor">Motor</label></td>
+				<td><input type="text" name="motor" id="motor" onkeyup="isText(this.value, this.id, 0)" /></td>
+			</tr>
+			<tr>
+				<td><label for="segelzeichen">Segelzeichen</label></td>
+				<td><input type="text" name="segelzeichen" id="segelzeichen" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="laenge">L&auml;nge</label></td>
+				<td><input type="text" name="laenge" id="laenge" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+				<td><label for="tankgroesse">Tankgr&ouml;&szlig;e</label></td>
+				<td><input type="text" name="tankgroesse" id="tankgroesse" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+			</tr>
+			<tr>
+				<td><label for="heimathafen">Heimathafen</label></td>
+				<td><input type="text" name="heimathafen" id="heimathafen" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="breite">Breite</label></td>
+				<td><input type="text" name="breite" id="breite" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+				<td><label for="wassertankgroesse">Wassertrankgr&ouml;&szlig;e</label></td>
+				<td><input type="text" name="wassertankgroesse" id="wassertankgroesse" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+			</tr>
+			<tr>
+				<td><label for="Yachtclub">Yachtclub</label></td>
+				<td><input type="text" name="yachtclub" id="yachtclub" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="Tiefgang">Tiefgang</label></td>
+				<td><input type="text" name="tiefgang" id="tiefgang" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+				<td><label for="abwassertankgroesse">Abwassertankgr&ouml;&szlig;e</label></td>
+				<td><input type="text" name="abwassertankgroesse" id="abwassertankgroesse" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+			</tr>
+			<tr>
+				<td><label for="eigner">Eigner</label></td>
+				<td><input type="text" name="eigner" id="eigner" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="masthoehe">Masth&ouml;he</label></td>
+				<td><input type="text" name="masthoehe" id="masthoehe" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+				<td><label for="grosssegelgroesse">Gro&szlig;segelgr&ouml;&szlig;e</label></td>
+				<td><input type="text" name="grosssegelgroesse" id="grosssegelgroesse" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+			</tr>
+			<tr>
+				<td><label for="versicherung">Versicherung</label></td>
+				<td><input type="text" name="versicherung" id="versicherung" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="verdraengung">Verdr&auml;ngung</label></td>
+				<td><input type="text" name="verdraengung" id="verdraengung" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+				<td><label for="genuagroesse">Genuagr&ouml;&szlig;e</label></td>
+				<td><input type="text" name="genuagroesse" id="genuagroesse" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+			</tr>
+			<tr>
+				<td><label for="rufzeichen">Rufzeichen</label></td>
+				<td><input type="text" name="rufzeichen" id="rufzeichen" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="rigart">Rig-Art</label></td>
+				<td><input type="text" name="rigart" id="rigart" onkeyup="isText(this.value, this.id, 0)" /></td>
+				<td><label for="spigroesse">Spigr&ouml;&szlig;e</label></td>
+				<td><input type="text" name="spigroesse" id="spigroesse" onkeyup="isNumber(this.value, this.id, 0)" /></td>
+			</tr>
+		</table>
+
+		<table id="boatinfo_list" border="0">
+			<thead>
+				<td class="boatinfo_table_header">Bootsname</td>
+				<td class="boatinfo_table_header">Bootstyp</td>
+				<td class="boatinfo_table_header">Konstrukteur</td>
+				<td class="boatinfo_table_header">L&auml;nge</td>
+				<td class="boatinfo_table_header">Inhaber</td>
+				<td class="boatinfo_table_header">Trips</td>
+   			</thead>
+			<tbody id="list">
+				
+			</tbody>
+		</table>
+
+		<!-- Buttons -->
+		<div id="boatinfo_buttons">
+			<button id="delete" onclick="javascript:delete_Boat()">L&ouml;schen</button>
+			<button id="save" onclick="insert_Boat()">Speichern</button>
+			<button id="latest" onclick="javascript:latest()">Neuester</button>
+			<button id="previous" onclick="javascript:previous()">Vorheriger</button>
+			<button id="next" onclick="javascript:next()">N&auml;chster</button>
+		</div>
+	</div>    
+}

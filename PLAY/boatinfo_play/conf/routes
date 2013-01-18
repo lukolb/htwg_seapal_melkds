@@ -1,0 +1,15 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# Home page
+GET     /                           controllers.Application.index()
+
+# Boatinfo
+GET     /boatinfo					controllers.Application.boatinfo()
+GET		/boatinfo_getBoat			controllers.Application.getBoatAtIdx()
+GET     /boatinfo_deleteBoat		controllers.Application.deleteBoat()
+POST  	/boatinfo_insertBoat		controllers.Application.insertBoat()								
+
+# Map static resources from the /public folder to the /assets URL path
+GET     /assets/*file               controllers.Assets.at(path="/public", file)

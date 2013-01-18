@@ -1,0 +1,4 @@
+- Was muss genau mit JSP und GWT/PLAY umgesetzt werden?
+- Wie ist das mit Datenbankzugriffen?
+- Wie genau sollen die Funktionen im Logbuch aussehen (Neuer Trip anlegen, Entry anlegen,...)?
+- Was ist mit "Löschen" bei  Kartenmenü gemeint?

@@ -1,0 +1,709 @@
+<html>
+<head>
+	<title>Map</title>
+
+	<!--Google Maps-->
+	<script type="text/javascript"
+		src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAAVHx_d1I9yUwYKlgVJle0su9PiwVODEk&sensor=false">
+	</script>
+	<!--JQuery-->
+	<script type="text/javascript" src="http://code.jquery.com/jquery-1.4.2.min.js"></script>
+
+	<script type="text/javascript">
+		var map;
+		var lastmarker;
+		var routezeichnen = 0;
+		var abstandmessen = 0;
+		var routePoints = [];
+		var abstandPoints = [];
+		var markers = [];
+		var abstandmarkers = [];
+		var polylines = [];
+		var abstandpolylines = [];
+		var route;
+		var routegezeichnet = 0;
+		var abstandmessen = 0;
+		var controlUI;
+		var controlText;
+		var abbrechenUI;
+		var abbrechenText;
+		var redoUI;
+		var redoText;
+		var max;
+		var oldMarker;
+		var aktualisieren = 0;
+		var routebeendet = 0;
+		var routeloeschen = 0;
+		var markerKoords;
+		var zoomlevel;
+
+		function initialize() {
+			var mapTypeIds = ["roadmap","satellite","OSM"];
+			var mapOptions = {
+				center: new google.maps.LatLng(47.66, 9.16),
+				zoom: 14,
+				minZoom: 3,
+				mapTypeId: google.maps.MapTypeId.ROADMAP,
+				mapTypeControlOptions: {
+					mapTypeIds: mapTypeIds
+				}
+			};
+			map = new google.maps.Map(document.getElementById("map_canvas"),mapOptions);
+
+			//Benutzerfläche Beenden-Button
+			var homeControlDiv = document.createElement('DIV');
+			var test = new beenden(homeControlDiv,map);
+			homeControlDiv.index=1;
+			map.controls[google.maps.ControlPosition.RIGHT_CENTER].push(homeControlDiv);
+
+			google.maps.event.addListener(map, 'center_changed', function() {
+				var lat = map.getCenter().lat();
+				var lng = map.getCenter().lng();
+				var lat_h = Math.floor(lat);
+				if(Math.abs(lat_h) < 10){
+					if(lat_h < 0){
+						lat_h = "-0" + Math.abs(lat_h);
+					}else{
+						lat_h = "0" + lat_h;
+					}
+				}
+
+				var lat_m = Math.floor((lat - lat_h) * 10000)/100;
+				if(lat_m < 10){
+					lat_m = "0" + lat_m;
+				}
+				var lng_h = Math.floor(lng);
+				if(Math.abs(lng_h) < 10){
+					if(lng_h < 0){
+						lng_h = "-00" + Math.abs(lng_h);
+					}else{
+						lng_h = "00" + lng_h;
+					}
+				}else if(Math.abs(lng_h) < 100){
+					if(lng_h < 0){
+						lng_h = "-0" + Math.abs(lng_h);
+					}else{
+						lng_h = "0" + lng_h;
+					}
+				}
+
+				var lng_m = Math.floor((lng - lng_h) * 10000)/100;
+				if(lng_m < 10){
+					lng_m = "0" + lng_m;
+				}
+				document.getElementById("lat").firstChild.nodeValue=lat_h + "°" + lat_m + "'N";
+				document.getElementById("long").firstChild.nodeValue=lng_h + "°" + lng_m + "'E";
+			})
+
+			/*Kontextmenü*/
+			google.maps.event.addListener(map, "click",function(event){
+				$('.markermenu').remove();
+				if(lastmarker){
+					lastmarker.setMap(null);
+				}
+				if(routezeichnen == 1 || abstandmessen == 1){
+					//Route zeichnen oder Abstand messen -->Marker setzen,Route zeichnen
+					lastmarker = new google.maps.Marker({
+						position: event.latLng,
+						map: map,
+						icon: "images/crosshair25px.png",
+						draggable: true
+					});
+					marker();
+					polyline();
+				}else{
+					if (demo_done) {
+						// Marker von Demo löschen und ausblenden
+						for(var i = marker_field.length-1; i >= 0; i--){
+							marker_field[i].setMap(null);
+							marker_field.pop();
+						}
+						
+						// Polylines von Demo löschen und ausblenden
+						for(var i = poly_field.length-1; i >= 0; i--){
+							poly_field[i].setMap(null);
+							poly_field.pop();
+						}
+						pos_field = new Array();
+						map.setZoom(14);
+					}
+					//Wenn Route nicht gezeichnet oder Abstand nicht gemessen wird -->Fadenkreuz setzen
+					lastmarker = new google.maps.Marker({
+						position: event.latLng,
+						map: map,
+						icon: "images/crosshair25px.png",
+						draggable: false
+					});
+					//Menü anzeigen falls keine Route gezeichnet oder Abstand gemessen wird
+					showContextMenu(event.latLng);}
+				}
+			);
+			//neuer Map Typ -->Openseemap
+			map.overlayMapTypes.push(new google.maps.ImageMapType({
+				getTileUrl: function(coord, zoom) {
+					return "http://tiles.openseamap.org/seamark/" + zoom +
+						"/" + coord.x + "/" + coord.y + ".png";
+				},
+				tileSize: new google.maps.Size(256, 256),
+				name: "OpenSeaMap",
+				maxZoom: 18 })
+			);
+			//neuer Map Typ -->Openstreetmap
+			map.mapTypes.set("OSM", new google.maps.ImageMapType({
+                getTileUrl: function(coord, zoom) {
+                    return "http://tile.openstreetmap.org/" + zoom + "/" + coord.x + "/" + coord.y + ".png";
+                },
+                tileSize: new google.maps.Size(256, 256),
+                name: "OpenStreetMap",
+                maxZoom: 18
+            }));
+			//bei ändern der Zoom-Stufe Kontextmenü und Fadenkreuz ausblenden
+			google.maps.event.addListener(map,'bounds_changed',function(){
+				$('.contextmenu').remove();
+				lastmarker.setMap(null);
+			});
+		}
+		/*Kontextmenü anzeigen*/
+		function showContextMenu(caurrentLatLng) {
+			var projection;
+			var contextmenuDir;
+			projection = map.getProjection();
+			$('.contextmenu').remove();
+			contextmenuDir = document.createElement("div");
+			contextmenuDir.className  = 'contextmenu';
+			contextmenuDir.innerHTML = "<table>"
+									+"<tr><td><img src='images/flagge16px.png'/><a href='#' id='menu1' onclick='marker()'>Markierung setzen</a></ br>"
+									+"<hr /></td></tr>"
+									+"<tr><td><img src='images/route16px.png'/><a href='#' id='menu2' onclick='polyline()'>Route setzen</a></ br>"
+									+"<hr /></td></tr>"
+									+"<tr><td><img src='images/abstand16px.png'/><a href='#' onclick='distance()'>Abstand von hier</a></ br>"
+									+"<hr /></td></tr>"
+									+"<tr><td><img src='images/delete.png'/><a href='#' onclick='abbrechen()'>Abbrechen</a></td></tr>"
+									+"</table>";
+			$(map.getDiv()).append(contextmenuDir);
+			//alert("caurrentLatLng: " + caurrentLatLng);
+			setMenuXY(caurrentLatLng);
+			contextmenuDir.style.visibility = "visible";
+        }
+		/*Marker Menü anzeigen*/
+		function showMarkerMenu(caurrentLatLng){
+			var projection;
+			var markerMenu;
+			projection = map.getProjection();
+			$('.markermenu').remove();
+			markerMenu = document.createElement("div");
+			markerMenu.className = "markermenu";
+			markerMenu.innerHTML = "<table>"
+									+ "<tr><td><img src='images/trash.png'/><a href='#' id='deletemarker' onclick='markerDelete()'>Löschen</a></td></tr>"
+									+ "<tr><td><hr /></td></tr>"
+									+ "<tr><td><img src='images/delete.png'/><a href='#' id='abbrechen' onclick='hideMarkerMenu()'>Abbrechen</a></td></tr>"
+									+ "</table>";
+			$(map.getDiv()).append(markerMenu);
+			setMarkerMenu(caurrentLatLng);
+			markerMenu.style.visibility = "visible";
+		}
+
+		function getCanvasXY(caurrentLatLng){
+			//alert("caurrentLatLng: " + caurrentLatLng);
+			var scale = Math.pow(2, map.getZoom());
+			var nw = new google.maps.LatLng(
+				map.getBounds().getNorthEast().lat(),
+				map.getBounds().getSouthWest().lng()
+			);
+			var worldCoordinateNW = map.getProjection().fromLatLngToPoint(nw);
+			var worldCoordinate = map.getProjection().fromLatLngToPoint(caurrentLatLng);
+			var caurrentLatLngOffset = new google.maps.Point(
+				Math.floor((worldCoordinate.x - worldCoordinateNW.x) * scale),
+				Math.floor((worldCoordinate.y - worldCoordinateNW.y) * scale)
+			);
+			//alert("caurrentLatLngOffset: " + caurrentLatLngOffset);
+			return caurrentLatLngOffset;
+		}
+
+		function setMenuXY(caurrentLatLng){
+			//alert("caurrentLatLng: " + caurrentLatLng);
+			var mapWidth = $('#map_canvas').width();
+			var mapHeight = $('#map_canvas').height();
+			var menuWidth = $('.contextmenu').width();
+			var menuHeight = $('.contextmenu').height();
+			var clickedPosition = getCanvasXY(caurrentLatLng);
+			//alert("clickedPosition: " + clickedPosition);
+			var x = clickedPosition.x ;
+			var y = clickedPosition.y ;
+
+			if((mapWidth - x ) < menuWidth)//if to close to the map border, decrease x position
+				  x = x - menuWidth;
+			if((mapHeight - y ) < menuHeight)//if to close to the map border, decrease y position
+				y = y - menuHeight;
+
+			$('.contextmenu').css('left',x  );
+			$('.contextmenu').css('top',y );
+		}
+		function setMarkerMenu(caurrentLatLng){
+			var mapWidth = $('#map_canvas').width();
+			var mapHeight = $('#map_canvas').height();
+			var menuWidth = $('.markermenu').width();
+			var menuHeight = $('.markermenu').height();
+			var clickedPosition = getCanvasXY(caurrentLatLng);
+			var x = clickedPosition.x ;
+			var y = clickedPosition.y ;
+
+			if((mapWidth - x ) < menuWidth)//if to close to the map border, decrease x position
+				  x = x - menuWidth;
+			if((mapHeight - y ) < menuHeight)//if to close to the map border, decrease y position
+				y = y - menuHeight;
+
+			$('.markermenu').css('left',x  );
+			$('.markermenu').css('top',y );
+		}
+
+		//Marker setzen
+		function marker(){
+			$('.contextmenu').remove();
+			if(lastmarker){
+				lastmarker.setMap(null);
+			}
+			var marker;
+			if(abstandmessen == 1){
+				marker = new google.maps.Marker({
+					position: lastmarker.getPosition(),
+					map: map,
+					icon: "images/markerAb.png",
+					draggable: false,
+					animation: google.maps.Animation.DROP
+				});
+			}else{
+				marker = new google.maps.Marker({
+					position: lastmarker.getPosition(),
+					map: map,
+					icon: "images/marker.png",
+					draggable: true,
+					animation: google.maps.Animation.DROP
+				});
+			}
+			/*Marker Events*/
+			/*Bei Klick auf Marker Menü anzeigen*/
+			if(abstandmessen == 1){
+				//do nothing
+			}else{
+				google.maps.event.addListener(marker,'click', function(event){
+					$('.contextmenu').remove();
+					markerKoords = event.latLng;
+					showMarkerMenu(event.latLng);
+				});
+			}
+
+			/*Dragstart-Event um die alte Position von Marker zu speichern*/
+			google.maps.event.addListener(marker,'dragstart', function(event){
+				oldMarker = this.getPosition();
+			});
+			/*Bei Bewegen eines Markers wird Route neu gezeichnet*/
+			google.maps.event.addListener(marker,'dragend', function(event){
+				/*Route Point anpassen*/
+				for(var i = routePoints.length-1; i >= 0; i--){
+					if(oldMarker == routePoints[i]){
+						routePoints[i]=event.latLng;
+					}
+				}
+				/*Polylines ausblenden + löschen*/
+				for (var i= polylines.length-1; i >= 0; i--) {
+					polylines[i].setMap(null);
+					polylines.pop();
+				}
+				/*Route neu zeichnen*/
+				aktualisieren = 1;
+				if(routezeichnen != 1){
+					routezeichnen = 1;
+				}
+				polyline();
+				aktualisieren = 0;
+				/*Falls Route beendet wurde routezeichnen wieder auf 0 setzen*/
+				if(routebeendet == 1){
+					routezeichnen = 0;
+				}
+			});
+
+			/*wenn Route gezeichnet oder Abstand gemessen wird Marker zu Feld hinzufügen*/
+			if(routezeichnen == 1){
+				routePoints.push(marker.getPosition());
+				markers.push(marker);
+			}else if(abstandmessen == 1){
+				abstandPoints.push(marker.getPosition());
+				abstandmarkers.push(marker);
+				polyline();
+			}
+		}
+
+		//Route zeichnen
+		function polyline(){
+			if(routezeichnen == 0 && abstandmessen == 0){
+				/*Wenn Route nicht aktualisiert wird alle Marker,Polylines löschen*/
+				if(aktualisieren != 1){
+					deleteMarkersRoute();
+				}
+				routezeichnen = 1;
+				//Menü ausblenden wenn Route gezeichnet wird
+				$('.contextmenu').remove();
+				//Button einblenden
+				controlText.innerHTML = 'Route beenden';
+				redoText.innerHTML = 'Rückgängig';
+				abbrechenText.innerHTML = 'Route abbrechen';
+				controlUI.style.display = 'block';
+				redoUI.style.display = 'block';
+				abbrechenUI.style.display = 'block';
+				marker();
+			}else{
+				if(routezeichnen == 1){
+					route = new google.maps.Polyline({
+						path: routePoints,
+						strokeColor: "#FF0000",
+						strokeOpacity: 1.0,
+						strokeWeight: 2
+					});
+					polylines.push(route);
+				}else if(abstandmessen == 1){
+					route = new google.maps.Polyline({
+						path: abstandPoints,
+						strokeColor: "#0000FF",
+						strokeOpacity: 1.0,
+						strokeWeight: 2
+					});
+					abstandpolylines.push(route);
+					getDistance();
+				}else{
+					//do nothing
+				}
+				route.setMap(map);
+				routegezeichnet = 1;
+			}
+		}
+
+		//Abstand messen
+		function distance(event){
+			if(abstandmessen == 0){
+				abstandmessen = 1;
+				//Menü ausblenden wenn Abstand gemessen wird
+				$('.contextmenu').remove();
+				//Button einblenden
+				//getDistance();
+				controlText.innerHTML = 'Abstandsmessung beenden';
+				controlUI.style.display = 'block';
+				redoText.innerHTML = '';
+				redoUI.style.display = 'block';
+				abbrechenText.innerHTML = '';
+				marker();
+			}
+		}
+		//gemessener Abstand ausgeben
+		function getDistance(){
+			var p1;
+			var p2;
+			var sum = 0;
+			for(var i = 0; i < abstandPoints.length-1; i++){
+				p1 = abstandPoints[i];
+				p2 = abstandPoints[i+1];
+				sum = sum + google.maps.geometry.spherical.computeDistanceBetween(p1,p2);
+			}
+			var sm = sum/1852;						//1sm = 1852m
+			/*Ausgabe....runden*/
+			var faktor = Math.pow(10,3);
+			var ausgabe = Math.round(sm * faktor)/faktor;
+			//alert(sum + "Meter\n" + sm + "Seemeilen");
+			//alert(ausgabe);
+			redoText.innerHTML = ausgabe + "nm";
+		}
+
+		//Abbrechen
+		function abbrechen(){
+			$('.contextmenu').remove();
+			lastmarker.setMap(null);
+		}
+		
+		/*Buttons*/
+		function beenden(controlDiv, map){
+			controlDiv.style.paddding = '5px';
+			//CSS Beenden Button
+			controlUI = document.createElement('DIV');
+			controlUI.style.backgroundColor = '#0a204a';
+			controlUI.style.height = '30px';
+			controlUI.style.borderStyle = 'solid';
+			controlUI.style.borderWidth = '1px';
+			controlUI.style.cursor = 'pointer';
+			controlUI.style.textAlign = 'center';
+			controlUI.style.display = 'none';
+			controlUI.style.margin = '10px';
+			controlUI.title = 'Beenden';
+			controlDiv.appendChild(controlUI);
+			//CSS Beenden Text
+			controlText = document.createElement('DIV');
+			controlText.style.fontFamily = 'Arial,sans-serif';
+			controlText.style.color = '#ffffff';
+			controlText.style.fontSize = '12px';
+			controlText.style.paddingLeft = '4px';
+			controlText.style.paddingRight = '4px';
+			controlText.style.paddingTop = '5px';
+			controlText.innerHTML = '';
+			controlUI.appendChild(controlText);
+
+			//CSS Redo Button
+			redoUI = document.createElement('DIV');
+			redoUI.style.backgroundColor = '#0a204a';
+			redoUI.style.height='30px';
+			redoUI.style.borderStyle = 'solid';
+			redoUI.style.borderWidth = '1px';
+			redoUI.style.cursor = 'pointer';
+			redoUI.style.textAlign = 'center';
+			redoUI.style.display = 'none';
+			redoUI.style.margin = '10px';
+			redoUI.title = 'Rückgängig';
+			controlDiv.appendChild(redoUI);
+			//CSS Redo Text
+			redoText = document.createElement('DIV');
+			redoText.style.fontFamily = 'Arial,sans-serif';
+			redoText.style.color = '#ffffff';
+			redoText.style.fontSize = '12px';
+			redoText.style.paddingLeft = '4px';
+			redoText.style.paddingRight = '4px';
+			redoText.style.paddingTop = '25px';
+			redoText.innerHTML = '';
+			controlUI.appendChild(redoText);
+
+			//CSS Abbrechen Button
+			abbrechenUI = document.createElement('DIV');
+			abbrechenUI.style.backgroundColor = '#0a204a';
+			abbrechenUI.style.height='30px';
+			abbrechenUI.style.borderStyle = 'solid';
+			abbrechenUI.style.borderWidth = '1px';
+			abbrechenUI.style.cursor = 'pointer';
+			abbrechenUI.style.textAlign = 'center';
+			abbrechenUI.style.display = 'none';
+			abbrechenUI.style.margin = '10px';
+			abbrechenUI.title = 'Abbrechen';
+			controlDiv.appendChild(abbrechenUI);
+			//CSS Abbrechen Text
+			abbrechenText = document.createElement('DIV');
+			abbrechenText.style.fontFamily = 'Arial,sans-serif';
+			abbrechenText.style.color = '#ffffff';
+			abbrechenText.style.fontSize = '12px';
+			abbrechenText.style.paddingLeft = '4px';
+			abbrechenText.style.paddingRight = '4px';
+			abbrechenText.style.paddingTop = '27px';
+			abbrechenText.innerHTML = '';
+			controlUI.appendChild(abbrechenText);
+
+			//Route beenden, Abstandmessen beenden
+			google.maps.event.addDomListener(controlUI, 'click', function() {
+				if(routezeichnen == 1){
+					finishRoute();
+				}else if(abstandmessen == 1){
+					deleteMarkersDistance();
+				}else{
+					//do nothing
+				}
+			});
+			//Route letzter Marke rückgängig
+			google.maps.event.addDomListener(redoUI, 'click', function() {
+				redoMarker();
+			});
+			//Route abbrechen
+			google.maps.event.addDomListener(abbrechenUI, 'click', function() {
+				check = confirm("Route wirklich abbrechen?");
+				if(check == true){
+					deleteMarkersRoute();
+				}else{
+					//do nothing
+				}
+			});
+		}
+
+		//Route beenden
+		function finishRoute(){
+			if(routezeichnen == 1){
+				routezeichnen = 0;
+				routebeendet = 1;
+				controlUI.style.display = 'none';
+				abbrechenUI.style.display='none';
+				redoUI.style.display='none';
+			}else if(abstandmessen == 1){
+				abstandmessen = 0;
+				controlUI.style.display = 'none';
+				redoUI.style.display = 'none';
+			}
+		}
+		//Redo
+		function redoMarker(){
+			//letzter Marker löschen
+			markers[markers.length-1].setMap(null);
+			markers.pop();
+			//Route ausblenden
+			for (var i=0; i < polylines.length; i++) {
+					polylines[i].setMap(null);
+			}
+			//letzte Polyline löschen
+			polylines.pop();
+			routePoints.pop();
+			//Route neu zeichnen
+			polyline();
+		}
+		//Route löschen
+		function deleteMarkersRoute(){
+			max = markers.length;
+			/*Polylines ausblenden*/
+			for (var i=0; i < polylines.length; i++) {
+				polylines[i].setMap(null);
+			}
+			/*Marker löschen und ausblenden*/
+			for(var i= max-1; i >= 0; i--){
+				markers[i].setMap(null);
+				markers.pop();
+			}
+			/*Route Points löschen*/
+			for(var i = routePoints.length-1; i >= 0; i--){
+				routePoints.pop();
+			}
+			/*Route zeichnen beenden*/
+			finishRoute();
+		}
+		//Abstand löschen
+		function deleteMarkersDistance(){
+			max = abstandmarkers.length;
+			/*Polylines ausblenden*/
+			for (var i=0; i < abstandpolylines.length; i++) {
+				abstandpolylines[i].setMap(null);
+			}
+			/*Marker löschen und ausblenden*/
+			for(var i= max-1; i >= 0; i--){
+				abstandmarkers[i].setMap(null);
+				abstandmarkers.pop();
+			}
+			/*Route Points löschen*/
+			for(var i = abstandPoints.length-1; i >= 0; i--){
+				abstandPoints.pop();
+			}
+			/*Abstand messen beenden*/
+			finishRoute();
+		}
+
+		//Marker löschen durch Marker Menü
+		function markerDelete(){
+			/*ausgewählter Marker ausblenden*/
+			for(var i = 0; i < markers.length;i++){
+				if(markerKoords == markers[i].getPosition()){
+					markers[i].setMap(null);
+				}
+			}
+			/*Route Points anpassen*/
+			for(var i = routePoints.length-1; i >= 0; i--){
+				if(markerKoords == routePoints[i]){
+					routePoints.splice(i,1);
+				}
+			}
+			/*Polylines ausblenden + löschen*/
+			for (var i= polylines.length-1; i >= 0; i--) {
+				polylines[i].setMap(null);
+				polylines.pop();
+			}
+			/*Route neu zeichnen*/
+			aktualisieren = 1;
+			if(routezeichnen != 1){
+				routezeichnen = 1;
+			}
+			polyline();
+			aktualisieren = 0;
+			/*Falls Route beendet wurde routezeichnen wieder auf 0 setzen*/
+			if(routebeendet == 1){
+				routezeichnen = 0;
+			}
+			/*Marker Menü ausblenden*/
+			$('.markermenu').remove();
+		}
+		//Marker Menü ausblenden
+		function hideMarkerMenu() {
+			$('.markermenu').remove();
+		}
+	</script>
+	<!--Comet.js-->
+	<script type="text/javascript" src="js/comet.js"></script>
+	<style type="text/css">
+		.contextmenu{
+			visibility:hidden;
+			background:#0a204a;
+			text-color:#ffffff;
+			border:1px solid #8888FF;
+			z-index: 10;
+			position: relative;
+			width: 150px;
+		}
+		.contextmenu a{
+			text-decoration:none;
+			color:#ffffff;
+		}
+		.contextmenu a:visited{
+			text-decoration:none;
+			color:#ffffff;
+		}
+		.contextmenu a:hover{
+			color:#95C500;
+		}
+		.contextmenu img{
+			margin-right: 5px;
+		}
+		.markermenu{
+			visibility:hidden;
+			background:#0a204a;
+			text-color:#ffffff;
+			border:1px solid #8888FF;
+			z-index: 10;
+			position: relative;
+			width: 100px;
+		}
+		.markermenu a{
+			text-decoration:none;
+			color:#ffffff;
+		}
+		.markermenu a:visited{
+			text-decoration:none;
+			color:#ffffff;
+		}
+		.markermenu a:hover{
+			color:#95C500;
+		}
+		.button{
+			visibility:hidden;
+			background:#ffffff;
+			width:100px;
+		}
+		div#koords{
+			text-align:right;
+			color:#ffffff;
+		}
+		span{
+			color:#ffffff;
+		}
+		.hiddenIFrame {
+			position:absolute;
+    		top:0px;
+    		left:0px;
+    		display:block;
+    		z-index:-999;
+    		visibility:hidden;
+		}
+	</style>
+</head>
+<body onload="initialize()" style="background-color:#0a204a;">
+	<!--Buttons-->
+	<div id="buttons" >
+		<form>
+		<a href="boatinfo.php"><input type="button" value="Zum Logbuch"/></a>
+		<input type="button" value="Tracking-Demo" id="demo_btn" onclick="connect()" />
+		<span id="dlt_spn"></span>
+		</form>
+	</div>
+	<!---Koordinaten-->
+	<div id="koords" >
+		Latitude <span id="lat">47°66.00'N</span> Longitude <span id="long">009°16.00'E </span>
+	</div>
+	<!--Karte-->
+	<div id="map_canvas" class="formDiv" style="width:100%;height:90%"></div>
+</body>
+</html>
